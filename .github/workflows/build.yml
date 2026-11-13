@@ -1,0 +1,74 @@
+name: build-ipa
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Версия Xcode
+        run: |
+          xcodebuild -version
+          xcrun -sdk iphoneos --show-sdk-version
+
+      - name: Схемы проекта
+        run: xcodebuild -list -project ScooterFlip.xcodeproj
+
+      - name: Собрать приложение (без подписи)
+        run: |
+          set -euo pipefail
+
+          OUT="$PWD/build/out"
+          rm -rf "$OUT"
+
+          if ! xcodebuild \
+              -project ScooterFlip.xcodeproj \
+              -scheme ScooterFlip \
+              -configuration Release \
+              -sdk iphoneos \
+              -destination 'generic/platform=iOS' \
+              CODE_SIGNING_ALLOWED=NO \
+              CODE_SIGNING_REQUIRED=NO \
+              CODE_SIGN_IDENTITY= \
+              CONFIGURATION_BUILD_DIR="$OUT" \
+              build; then
+            echo "::warning::Сборка по схеме не удалась, пробую по target"
+            xcodebuild \
+              -project ScooterFlip.xcodeproj \
+              -target ScooterFlip \
+              -configuration Release \
+              -sdk iphoneos \
+              CODE_SIGNING_ALLOWED=NO \
+              CODE_SIGNING_REQUIRED=NO \
+              CODE_SIGN_IDENTITY= \
+              CONFIGURATION_BUILD_DIR="$OUT" \
+              build
+          fi
+
+      - name: Упаковать .ipa
+        run: |
+          set -euo pipefail
+          APP="build/out/ScooterFlip.app"
+          test -d "$APP" || { echo "Не найден $APP"; ls -R build || true; exit 1; }
+          rm -rf Payload ScooterFlip.ipa
+          mkdir -p Payload
+          cp -R "$APP" Payload/
+          zip -qry ScooterFlip.ipa Payload
+          rm -rf Payload
+          ls -lh ScooterFlip.ipa
+          shasum -a 256 ScooterFlip.ipa
+
+      - name: Загрузить артефакт
+        uses: actions/upload-artifact@v4
+        with:
+          name: ScooterFlip-ipa
+          path: ScooterFlip.ipa
+          if-no-files-found: error
