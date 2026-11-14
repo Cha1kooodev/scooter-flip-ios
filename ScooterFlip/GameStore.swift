@@ -332,7 +332,7 @@ final class GameStore: ObservableObject {
         let model = ScooterCatalog.all.randomElement() ?? ScooterCatalog.model("kugoo-s3")
 
         // Примерно каждое третье объявление — без поломок.
-        let clean = Int.random(in: 0..<100) < 36
+        let clean = Int.random(in: 0..<100) < 42
 
         var condition: Double
         var battery: Double
@@ -341,8 +341,8 @@ final class GameStore: ObservableObject {
         var flashFault: FlashFault?
 
         if clean {
-            condition = Double(Int.random(in: 82...100))
-            battery = Double(Int.random(in: 68...100))
+            condition = 100
+            battery = Double(Int.random(in: 74...100))
             mileage = Int.random(in: 150...5_000)
             needed = nil
         } else {
