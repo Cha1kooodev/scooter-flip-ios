@@ -605,7 +605,7 @@ final class GameStore: ObservableObject {
     ]
 
     private static let stripModels = [
-        "ninebot-g30p", "ninebot-g2", "ninebot-s90l",
+        "ninebot-s90l",
         "ninebot-snsc20", "ninebot-snsc22", "ninebot-snsc23", "ninebot-snsc24",
     ]
 
@@ -617,7 +617,7 @@ final class GameStore: ObservableObject {
     func refreshStreet() {
         var units: [StreetUnit] = []
         for _ in 0..<3 {
-            let modelID = Self.stripModels.randomElement() ?? "ninebot-g2"
+            let modelID = Self.stripModels.randomElement() ?? "ninebot-s90l"
             units.append(
                 StreetUnit(
                     modelID: modelID,

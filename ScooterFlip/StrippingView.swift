@@ -82,7 +82,7 @@ struct StrippingView: View {
                 Text("Риск 30%")
                     .font(.system(size: 13, weight: .bold))
                     .foregroundColor(.bad)
-                Text("Скручивай детали с шеринговых Ninebot: G30, Max G2, S90L, SNSC. " +
+                Text("Скручивай детали с шеринговых Ninebot: S90L и SNSC 2.0–2.4. " +
                      "В 30% случаев приезжает СБ и изымает все самокаты из гаража. " +
                      "Деньги и запчасти остаются.")
                     .font(.system(size: 11))
