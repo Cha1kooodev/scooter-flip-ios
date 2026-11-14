@@ -305,7 +305,9 @@ struct FlashGameView: View {
                 let outcome = store.finishFlash(job)
                 switch outcome {
                 case .success: done = true
-                case .failed:  failed = true
+                case .failed:
+                    SoundPlayer.shared.play(.flashFail)
+                    failed = true
                 }
             }
         }

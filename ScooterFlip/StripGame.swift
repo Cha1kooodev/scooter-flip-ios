@@ -267,6 +267,7 @@ struct StripGameView: View {
                         hint = nil
                         step = .screwdriver
                     } else {
+                        SoundPlayer.shared.play(.deckMiss)
                         showDeckHint = true
                         hint = "Мимо. Дека — это широкая площадка между колёсами, под ногами."
                     }
@@ -305,8 +306,10 @@ struct StripGameView: View {
                 TimingBar(target: $target) { hit in
                     if hit {
                         hint = nil
+                        SoundPlayer.shared.play(.deckOpen)
                         step = .screws
                     } else {
+                        SoundPlayer.shared.play(.deckMiss)
                         hint = "Бита соскочила. Попробуй ещё раз — лови метку в зелёной зоне."
                         target = Double.random(in: 0.18...0.82)
                     }
@@ -501,7 +504,11 @@ struct StripGameView: View {
 
     private func finishStrip() {
         guard !done else { return }
-        result = store.strip(unit)
+        let outcome = store.strip(unit)
+        if case .caught = outcome {
+            SoundPlayer.shared.play(.caught)
+        }
+        result = outcome
         done = true
         step = .result
     }
