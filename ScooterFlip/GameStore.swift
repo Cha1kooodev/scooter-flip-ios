@@ -25,10 +25,17 @@ struct GameState: Codable {
     var strips: Int
     var caught: Int
 
+    // Прошивка
+    var unflashed: [String: Int]
+    var tools: [String: Bool]
+    var flashedParts: Int
+    var flashedScooters: Int
+
     enum CodingKeys: String, CodingKey {
         case money, scooters, listings, parts, profit, soldCount, repairs, rolls
         case bestNumber, playerName, startedAt, totalBought, totalSpent, totalEarned
         case strips, caught
+        case unflashed, tools, flashedParts, flashedScooters
     }
 
     init(money: Int,
@@ -46,7 +53,11 @@ struct GameState: Codable {
          totalSpent: Int,
          totalEarned: Int,
          strips: Int = 0,
-         caught: Int = 0) {
+         caught: Int = 0,
+         unflashed: [String: Int] = [:],
+         tools: [String: Bool] = [:],
+         flashedParts: Int = 0,
+         flashedScooters: Int = 0) {
         self.money = money
         self.scooters = scooters
         self.listings = listings
@@ -63,6 +74,10 @@ struct GameState: Codable {
         self.totalEarned = totalEarned
         self.strips = strips
         self.caught = caught
+        self.unflashed = unflashed
+        self.tools = tools
+        self.flashedParts = flashedParts
+        self.flashedScooters = flashedScooters
     }
 
     init(from decoder: Decoder) throws {
@@ -83,6 +98,10 @@ struct GameState: Codable {
         totalEarned = try container.decodeIfPresent(Int.self, forKey: .totalEarned) ?? 0
         strips = try container.decodeIfPresent(Int.self, forKey: .strips) ?? 0
         caught = try container.decodeIfPresent(Int.self, forKey: .caught) ?? 0
+        unflashed = try container.decodeIfPresent([String: Int].self, forKey: .unflashed) ?? [:]
+        tools = try container.decodeIfPresent([String: Bool].self, forKey: .tools) ?? [:]
+        flashedParts = try container.decodeIfPresent(Int.self, forKey: .flashedParts) ?? 0
+        flashedScooters = try container.decodeIfPresent(Int.self, forKey: .flashedScooters) ?? 0
     }
 
     static func fresh() -> GameState {
@@ -213,8 +232,21 @@ final class GameStore: ObservableObject {
         state.parts[part.rawValue] ?? 0
     }
 
+    /// Непрошитые детали, снятые с шеринга.
+    func unflashedStock(of part: PartKind) -> Int {
+        state.unflashed[part.rawValue] ?? 0
+    }
+
     var totalParts: Int {
-        state.parts.values.reduce(0, +)
+        state.parts.values.reduce(0, +) + state.unflashed.values.reduce(0, +)
+    }
+
+    func owns(_ tool: ToolKind) -> Bool {
+        state.tools[tool.rawValue] ?? false
+    }
+
+    var unflashedCount: Int {
+        state.unflashed.values.reduce(0, +)
     }
 
     // MARK: Цена
@@ -241,6 +273,9 @@ final class GameStore: ObservableObject {
 
         let numberValue = scooter.number?.rarity.bonus ?? 0
 
+        // Непрошитый контроллер/батарея/дисплей режут цену, пока не прошьёшь.
+        let flashPenalty = scooter.flashFault == nil ? 0 : -Int(Double(afterMileage) * 0.20)
+
         return ValueBreakdown(
             base: base,
             condition: afterCondition - base,
@@ -249,7 +284,8 @@ final class GameStore: ObservableObject {
             tuning: tuningValue,
             upgrades: upgradesValue,
             number: numberValue,
-            total: afterMileage + tuningValue + upgradesValue + numberValue
+            flash: flashPenalty,
+            total: afterMileage + tuningValue + upgradesValue + numberValue + flashPenalty
         )
     }
 
@@ -265,7 +301,8 @@ final class GameStore: ObservableObject {
             mileage: listing.mileage,
             number: listing.number,
             boughtPrice: 0,
-            neededPart: listing.neededPart
+            neededPart: listing.neededPart,
+            flashFault: listing.flashFault
         )
         return breakdown(for: temp).total
     }
@@ -293,16 +330,39 @@ final class GameStore: ObservableObject {
 
     private func makeListing() -> Listing {
         let model = ScooterCatalog.all.randomElement() ?? ScooterCatalog.model("kugoo-s3")
-        let condition = Double(Int.random(in: 22...88))
-        let battery = Double(Int.random(in: 42...100))
-        let mileage = Int.random(in: 300...14_000)
+
+        // Примерно каждое третье объявление — без поломок.
+        let clean = Int.random(in: 0..<100) < 36
+
+        var condition: Double
+        var battery: Double
+        var mileage: Int
+        var needed: PartKind?
+        var flashFault: FlashFault?
+
+        if clean {
+            condition = Double(Int.random(in: 82...100))
+            battery = Double(Int.random(in: 68...100))
+            mileage = Int.random(in: 150...5_000)
+            needed = nil
+        } else {
+            condition = Double(Int.random(in: 22...88))
+            battery = Double(Int.random(in: 42...100))
+            mileage = Int.random(in: 300...14_000)
+            needed = Self.pickNeededPart(condition: condition, battery: battery)
+        }
+
+        // Прошивка — только у шеринговых моделей.
+        if model.kind == .sharing && Int.random(in: 0..<100) < 50 {
+            flashFault = [FlashFault.all, .controller, .battery, .display].randomElement()
+            condition = min(condition, 90)
+        }
 
         var number: NumberPlate?
         if model.kind == .sharing && Int.random(in: 0..<100) < 30 {
             number = NumberFactory.make(NumberFactory.rollRarity())
         }
 
-        let needed = Self.pickNeededPart(condition: condition, battery: battery)
         let temp = OwnedScooter(
             modelID: model.id,
             condition: condition,
@@ -310,11 +370,12 @@ final class GameStore: ObservableObject {
             mileage: mileage,
             number: number,
             boughtPrice: 0,
-            neededPart: needed
+            neededPart: needed,
+            flashFault: flashFault
         )
 
         let fair = breakdown(for: temp).total
-        let factor = Double.random(in: 0.72...0.97)
+        let factor = clean ? Double.random(in: 0.86...1.02) : Double.random(in: 0.72...0.97)
         let price = roundToHundred(Int(Double(max(fair, 3_000)) * factor))
 
         return Listing(
@@ -325,7 +386,8 @@ final class GameStore: ObservableObject {
             number: number,
             price: price,
             seller: Self.sellerName(for: model.kind),
-            neededPart: needed
+            neededPart: needed,
+            flashFault: flashFault
         )
     }
 
@@ -346,7 +408,8 @@ final class GameStore: ObservableObject {
             mileage: listing.mileage,
             number: listing.number,
             boughtPrice: listing.price,
-            neededPart: listing.neededPart
+            neededPart: listing.neededPart,
+            flashFault: listing.flashFault
         )
         state.scooters.insert(scooter, at: 0)
         state.listings.removeAll { $0.id == listing.id }
@@ -367,6 +430,10 @@ final class GameStore: ObservableObject {
     func repair(id: UUID) {
         guard let index = state.scooters.firstIndex(where: { $0.id == id }) else { return }
         let scooter = state.scooters[index]
+        if let fault = scooter.flashFault {
+            showToast("Сначала прошей: \(fault.shortTitle)")
+            return
+        }
         guard scooter.condition < 99.9 else {
             showToast("Самокат и так в порядке")
             return
@@ -420,6 +487,10 @@ final class GameStore: ObservableObject {
         let cost = tuneCost(kind, for: scooter)
         guard state.money >= cost else {
             showToast("Не хватает \(rub(cost - state.money))")
+            return
+        }
+        if kind == .firmware && !owns(.stlink) {
+            showToast("Для прошивки нужен ST-LINK V2 (Магазин → Инструмент)")
             return
         }
 
@@ -551,6 +622,42 @@ final class GameStore: ObservableObject {
         showToast("Купил: \(part.title)")
     }
 
+    // MARK: Инструмент и прошивка
+
+    func buyTool(_ tool: ToolKind) {
+        guard !owns(tool) else { return }
+        guard state.money >= tool.price else {
+            showToast("Не хватает \(rub(tool.price - state.money))")
+            return
+        }
+        state.money -= tool.price
+        state.totalSpent += tool.price
+        state.tools[tool.rawValue] = true
+        save()
+        showToast("Куплено: \(tool.title)")
+    }
+
+    /// Прошивка завершена: деталь со склада или самокат с прошивочной неисправностью.
+    func finishFlash(_ job: FlashJobKind) {
+        switch job {
+        case .part(let part):
+            let pending = unflashedStock(of: part)
+            guard pending > 0 else {
+                showToast("Нечего прошивать")
+                return
+            }
+            state.unflashed[part.rawValue] = pending - 1
+            state.parts[part.rawValue] = stock(of: part) + 1
+            state.flashedParts += 1
+
+        case .scooter(let id, _):
+            guard let index = state.scooters.firstIndex(where: { $0.id == id }) else { return }
+            state.scooters[index].flashFault = nil
+            state.flashedScooters += 1
+        }
+        save()
+    }
+
     // MARK: Профиль
 
     func setPlayerName(_ name: String) {
@@ -600,8 +707,8 @@ final class GameStore: ObservableObject {
     // MARK: Разборка шеринга
 
     static let sharingLootPool: [PartKind] = [
-        .battery, .motor, .controller, .motor, .battery,
-        .controller, .tire, .pads, .bearing, .disc,
+        .battery, .controller, .display, .motor, .battery,
+        .controller, .display, .tire, .pads, .bearing, .disc,
     ]
 
     private static let stripModels = [
@@ -648,7 +755,11 @@ final class GameStore: ObservableObject {
         var loot: [PartKind] = []
         for _ in 0..<count {
             let part = Self.sharingLootPool.randomElement() ?? .motor
-            state.parts[part.rawValue] = stock(of: part) + 1
+            if part.needsFirmware {
+                state.unflashed[part.rawValue] = unflashedStock(of: part) + 1
+            } else {
+                state.parts[part.rawValue] = stock(of: part) + 1
+            }
             loot.append(part)
         }
         save()
@@ -671,9 +782,10 @@ final class GameStore: ObservableObject {
         if battery < 55 { return .battery }
         let roll = Int.random(in: 0..<100)
         switch roll {
-        case ..<24: return .tire
-        case ..<46: return .pads
-        case ..<62: return .controller
+        case ..<22: return .tire
+        case ..<42: return .pads
+        case ..<56: return .controller
+        case ..<62: return .display
         case ..<74: return .motor
         case ..<86: return .bearing
         case ..<94: return .disc

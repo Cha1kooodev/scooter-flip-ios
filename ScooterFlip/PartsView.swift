@@ -3,6 +3,7 @@ import SwiftUI
 enum PartsTab: String, CaseIterable, Identifiable {
     case repair
     case tuning
+    case tools
 
     var id: String { rawValue }
 
@@ -10,6 +11,7 @@ enum PartsTab: String, CaseIterable, Identifiable {
         switch self {
         case .repair: return "Ремонт"
         case .tuning: return "Тюнинг"
+        case .tools:  return "Инструмент"
         }
     }
 }
@@ -19,13 +21,14 @@ struct PartsView: View {
 
     @State private var tab: PartsTab = .repair
     @State private var installTarget: UpgradeKind?
+    @State private var flashJob: FlashJobKind?
 
     var body: some View {
         ZStack {
             Color.appBg.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                ScreenHeader(title: "Магазин", subtitle: "Запчасти и тюнинг")
+                ScreenHeader(title: "Магазин", subtitle: "Запчасти, тюнинг и инструмент")
 
                 ScrollView {
                     VStack(spacing: 12) {
@@ -37,10 +40,10 @@ struct PartsView: View {
                         .pickerStyle(.segmented)
                         .tint(Color.accent)
 
-                        if tab == .repair {
-                            repairSection
-                        } else {
-                            tuningSection
+                        switch tab {
+                        case .repair: repairSection
+                        case .tuning: tuningSection
+                        case .tools:  toolsSection
                         }
                     }
                     .padding(.horizontal, 16)
@@ -52,6 +55,10 @@ struct PartsView: View {
             UpgradeInstallSheet(kind: kind)
                 .environmentObject(store)
         }
+        .sheet(item: $flashJob) { job in
+            FlashGameView(job: job)
+                .environmentObject(store)
+        }
     }
 
     // MARK: Ремонт
@@ -60,11 +67,11 @@ struct PartsView: View {
     private var repairSection: some View {
         InfoCard(
             text: "Для ремонта нужна конкретная деталь — при починке она списывается со склада. " +
-                  "Детали дешевле покупать заранее."
+                  "Контроллер, дисплей и батарею с шеринга сначала нужно прошить ST-LINK V2."
         )
 
         ForEach(PartKind.allCases) { part in
-            PartRow(part: part)
+            PartRow(part: part) { flashJob = .part($0) }
         }
     }
 
@@ -91,6 +98,78 @@ struct PartsView: View {
             }
         }
     }
+
+    // MARK: Инструмент
+
+    @ViewBuilder
+    private var toolsSection: some View {
+        InfoCard(
+            text: "ST-LINK V2 нужен для прошивки контроллера, батареи и дисплея. " +
+                  "Торкс-биты — чтобы открутить контроллер с деки при разборке шеринга."
+        )
+
+        ForEach(ToolKind.allCases) { tool in
+            ToolRow(tool: tool)
+        }
+    }
+}
+
+// MARK: - Инструмент в магазине
+
+struct ToolRow: View {
+    @EnvironmentObject private var store: GameStore
+
+    let tool: ToolKind
+
+    private var owned: Bool { store.owns(tool) }
+    private var canAfford: Bool { store.state.money >= tool.price }
+
+    var body: some View {
+        HStack(spacing: 11) {
+            PartArt(key: tool.artKey)
+                .frame(width: 46, height: 46)
+                .padding(5)
+                .background(Color.panel2)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(Color.line, lineWidth: 1)
+                )
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(tool.title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.textPrimary)
+                Text(tool.note)
+                    .font(.system(size: 10))
+                    .foregroundColor(.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 6)
+
+            VStack(alignment: .trailing, spacing: 6) {
+                Text(owned ? "куплено" : rub(tool.price))
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(owned ? .good : .textPrimary)
+
+                Button {
+                    store.buyTool(tool)
+                } label: {
+                    Text(owned ? "Есть" : "Купить")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(owned ? .good : (canAfford ? .appBg : .muted))
+                        .padding(.horizontal, 11)
+                        .padding(.vertical, 6)
+                        .background(owned ? Color.good.opacity(0.15) : (canAfford ? Color.accent : Color.panel2))
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(PressableStyle())
+                .disabled(owned || !canAfford)
+            }
+        }
+        .cardStyle()
+    }
 }
 
 // MARK: - Деталь на складе
@@ -99,8 +178,10 @@ struct PartRow: View {
     @EnvironmentObject private var store: GameStore
 
     let part: PartKind
+    let onFlash: (PartKind) -> Void
 
     private var count: Int { store.stock(of: part) }
+    private var pending: Int { store.unflashedStock(of: part) }
     private var canAfford: Bool { store.state.money >= part.price }
 
     var body: some View {
@@ -125,6 +206,25 @@ struct PartRow: View {
                 Text("на складе: \(count) шт.")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundColor(count > 0 ? .good : .muted)
+
+                if pending > 0 {
+                    Button {
+                        onFlash(part)
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "bolt.horizontal.fill")
+                                .font(.system(size: 9, weight: .bold))
+                            Text("Прошить: \(pending)")
+                                .font(.system(size: 9.5, weight: .bold))
+                        }
+                        .foregroundColor(store.owns(.stlink) ? .appBg : .warn)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(store.owns(.stlink) ? Color.good : Color.warn.opacity(0.15))
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(PressableStyle())
+                }
             }
 
             Spacer(minLength: 6)

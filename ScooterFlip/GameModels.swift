@@ -290,6 +290,7 @@ enum PartKind: String, Codable, CaseIterable, Identifiable {
     case tire
     case pads
     case controller
+    case display
     case battery
     case motor
     case bearing
@@ -297,11 +298,20 @@ enum PartKind: String, Codable, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    /// Электронику с шеринга нужно прошивать ST-LINK V2.
+    var needsFirmware: Bool {
+        switch self {
+        case .controller, .display, .battery: return true
+        default: return false
+        }
+    }
+
     var title: String {
         switch self {
         case .tire:       return "Покрышка"
         case .pads:       return "Тормозные колодки"
         case .controller: return "Контроллер"
+        case .display:    return "Бортовой дисплей"
         case .battery:    return "Аккумулятор"
         case .motor:      return "Мотор-колесо"
         case .bearing:    return "Подшипники"
@@ -314,6 +324,7 @@ enum PartKind: String, Codable, CaseIterable, Identifiable {
         case .tire:       return "circle.dashed"
         case .pads:       return "line.3.horizontal"
         case .controller: return "cpu"
+        case .display:    return "display"
         case .battery:    return "bolt.fill"
         case .motor:      return "gearshape.fill"
         case .bearing:    return "circle.hexagongrid"
@@ -326,6 +337,7 @@ enum PartKind: String, Codable, CaseIterable, Identifiable {
         case .tire:       return "tire"
         case .pads:       return "pads"
         case .controller: return "controller"
+        case .display:    return "display"
         case .battery:    return "battery"
         case .motor:      return "motor"
         case .bearing:    return "bearing"
@@ -338,6 +350,7 @@ enum PartKind: String, Codable, CaseIterable, Identifiable {
         case .tire:       return 2_500
         case .pads:       return 1_500
         case .controller: return 12_000
+        case .display:    return 6_500
         case .battery:    return 19_000
         case .motor:      return 22_000
         case .bearing:    return 1_200
@@ -350,10 +363,135 @@ enum PartKind: String, Codable, CaseIterable, Identifiable {
         case .tire:       return "Проколы и износ колёс"
         case .pads:       return "Тормоза и скрип"
         case .controller: return "Ошибки, самокат не едет"
+        case .display:    return "Не включается, нет индикации"
         case .battery:    return "Просадка батареи"
         case .motor:      return "Гудит и не тянет"
         case .bearing:    return "Люфт и хруст в колесе"
         case .disc:       return "Восьмёрка и биение"
+        }
+    }
+}
+
+// MARK: - Прошивка
+
+/// Неисправность шерингового самоката, которую лечат только прошивкой.
+enum FlashFault: String, Codable, CaseIterable, Identifiable {
+    case all
+    case controller
+    case battery
+    case display
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .all:        return "Требуется прошивка всего"
+        case .controller: return "Требуется прошивка контроллера"
+        case .battery:    return "Требуется прошивка батареи"
+        case .display:    return "Требуется прошивка дисплея"
+        }
+    }
+
+    var shortTitle: String {
+        switch self {
+        case .all:        return "прошивка всего (3 блока)"
+        case .controller: return "прошивка контроллера"
+        case .battery:    return "прошивка батареи"
+        case .display:    return "прошивка дисплея"
+        }
+    }
+
+    /// Какие блоки прошиваем по очереди.
+    var blocks: [PartKind] {
+        switch self {
+        case .all:        return [.controller, .battery, .display]
+        case .controller: return [.controller]
+        case .battery:    return [.battery]
+        case .display:    return [.display]
+        }
+    }
+}
+
+// MARK: - Инструмент
+
+enum ToolKind: String, Codable, CaseIterable, Identifiable {
+    case stlink
+    case torx
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .stlink: return "Программатор ST-LINK V2"
+        case .torx:   return "Набор торкс-бит"
+        }
+    }
+
+    var note: String {
+        switch self {
+        case .stlink: return "Прошивка контроллеров, батарей и дисплеев"
+        case .torx:   return "Снятие контроллера с деки"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .stlink: return "cable.connector"
+        case .torx:   return "screwdriver.fill"
+        }
+    }
+
+    var artKey: String { rawValue }
+
+    var price: Int {
+        switch self {
+        case .stlink: return 1_000
+        case .torx:   return 2_500
+        }
+    }
+}
+
+/// Что именно прошиваем: деталь со склада или самокат с неисправностью.
+enum FlashJobKind: Identifiable, Equatable {
+    case part(PartKind)
+    case scooter(UUID, FlashFault)
+
+    var id: String {
+        switch self {
+        case .part(let part):
+            return "part-\(part.rawValue)"
+        case .scooter(let id, let fault):
+            return "scooter-\(id.uuidString)-\(fault.rawValue)"
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .part(let part):
+            return "Прошивка: \(part.title)"
+        case .scooter(_, let fault):
+            return fault.title
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .part:
+            return "ST-LINK V2 · подключи три пина на плате"
+        case .scooter(_, let fault):
+            if fault == .all {
+                return "ST-LINK V2 · три блока по очереди"
+            }
+            return "ST-LINK V2 · один блок"
+        }
+    }
+
+    var blocks: [PartKind] {
+        switch self {
+        case .part(let part):
+            return [part]
+        case .scooter(_, let fault):
+            return fault.blocks
         }
     }
 }
@@ -458,6 +596,7 @@ struct OwnedScooter: Identifiable, Codable, Equatable {
     var upgrades: [UpgradeKind] = []
     var boughtPrice: Int
     var neededPart: PartKind?
+    var flashFault: FlashFault? = nil
 
     var model: ScooterModel { ScooterCatalog.model(modelID) }
 
@@ -491,8 +630,11 @@ struct Listing: Identifiable, Codable {
     var price: Int
     var seller: String
     var neededPart: PartKind?
+    var flashFault: FlashFault? = nil
 
     var model: ScooterModel { ScooterCatalog.model(modelID) }
+
+    var isClean: Bool { neededPart == nil && flashFault == nil }
 }
 
 // MARK: - Расчёт цены
@@ -505,5 +647,6 @@ struct ValueBreakdown {
     var tuning: Int
     var upgrades: Int
     var number: Int
+    var flash: Int
     var total: Int
 }

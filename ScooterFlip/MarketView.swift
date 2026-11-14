@@ -117,6 +117,26 @@ struct ListingCard: View {
                 .foregroundColor(.warn)
             }
 
+            if let fault = listing.flashFault {
+                HStack(spacing: 6) {
+                    Image(systemName: "bolt.horizontal.fill")
+                        .font(.system(size: 10))
+                    Text(fault.title + " · ST-LINK V2")
+                        .font(.system(size: 11, weight: .medium))
+                }
+                .foregroundColor(.bad)
+            }
+
+            if listing.isClean {
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark.seal.fill")
+                        .font(.system(size: 10))
+                    Text("Без поломок")
+                        .font(.system(size: 11, weight: .semibold))
+                }
+                .foregroundColor(.good)
+            }
+
             Rectangle()
                 .fill(Color.line)
                 .frame(height: 1)

@@ -98,7 +98,12 @@ struct GarageCard: View {
             }
 
             HStack {
-                if scooter.condition < 99 {
+                if let fault = scooter.flashFault {
+                    Label(fault.shortTitle, systemImage: "bolt.horizontal.fill")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.bad)
+                        .lineLimit(1)
+                } else if scooter.condition < 99 {
                     Label("Нужна деталь: \(part.title)", systemImage: "wrench.and.screwdriver.fill")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(.warn)
@@ -124,6 +129,7 @@ struct ScooterDetailView: View {
     let scooterID: UUID
 
     @State private var confirmSell = false
+    @State private var flashJob: FlashJobKind?
 
     var body: some View {
         NavigationStack {
@@ -160,6 +166,10 @@ struct ScooterDetailView: View {
             }
         }
         .preferredColorScheme(.dark)
+        .sheet(item: $flashJob) { job in
+            FlashGameView(job: job)
+                .environmentObject(store)
+        }
         .confirmationDialog("Продать самокат?", isPresented: $confirmSell, titleVisibility: .visible) {
             if let scooter = store.scooter(scooterID) {
                 Button("Продать за ≈ \(rub(store.sellEstimate(for: scooter)))") {
@@ -228,6 +238,9 @@ struct ScooterDetailView: View {
             if b.number > 0 {
                 row("Номер", signedRub(b.number), scooter.number?.rarity.color ?? .good)
             }
+            if b.flash < 0 {
+                row("Не прошито", signedRub(b.flash), .bad)
+            }
 
             Rectangle()
                 .fill(Color.line)
@@ -243,6 +256,7 @@ struct ScooterDetailView: View {
         let stock = store.stock(of: part)
         let cost = store.repairCost(for: scooter)
         let needsRepair = scooter.condition < 99.9
+        let fault = scooter.flashFault
 
         return VStack(alignment: .leading, spacing: 9) {
             HStack(spacing: 8) {
@@ -252,8 +266,39 @@ struct ScooterDetailView: View {
                     .font(.system(size: 15, weight: .bold))
                     .foregroundColor(.textPrimary)
                 Spacer()
-                if !needsRepair {
+                if fault == nil && !needsRepair {
                     Tag(text: "В порядке", color: .good)
+                }
+            }
+
+            if let fault {
+                Text(fault.title)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.bad)
+
+                Text("ST-LINK V2 · \(fault.blocks.count == 1 ? "один блок" : "3 блока по очереди") · подключение к трём пинам")
+                    .font(.system(size: 10))
+                    .foregroundColor(.muted)
+
+                if store.owns(.stlink) {
+                    PrimaryActionButton(
+                        title: "Прошить сейчас",
+                        icon: "bolt.horizontal.fill",
+                        color: .good
+                    ) {
+                        flashJob = .scooter(scooter.id, fault)
+                    }
+                } else {
+                    Text("Нужен программатор ST-LINK V2 — «Магазин» → «Инструмент», \(rub(ToolKind.stlink.price)).")
+                        .font(.system(size: 10))
+                        .foregroundColor(.warn)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    PrimaryActionButton(
+                        title: "Без ST-LINK не прошить",
+                        icon: "cable.connector.slash",
+                        enabled: false
+                    ) {}
                 }
             }
 
@@ -265,12 +310,12 @@ struct ScooterDetailView: View {
                 PrimaryActionButton(
                     title: "Починить за \(rub(cost))",
                     icon: "wrench.fill",
-                    color: stock > 0 ? .accent : .panel2,
-                    enabled: stock > 0 && store.state.money >= cost
+                    color: stock > 0 && fault == nil ? .accent : .panel2,
+                    enabled: stock > 0 && fault == nil && store.state.money >= cost
                 ) {
                     store.repair(id: scooter.id)
                 }
-            } else {
+            } else if fault == nil {
                 Text("Состояние 100%. Можно ставить железо и продавать.")
                     .font(.system(size: 12))
                     .foregroundColor(.muted)

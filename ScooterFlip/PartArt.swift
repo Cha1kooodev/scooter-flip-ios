@@ -193,6 +193,67 @@ struct PartArt: View {
             rod.addLine(to: CGPoint(x: 32, y: 53))
             ctx.stroke(rod, with: .color(Color(hex: 0x30353F)), lineWidth: 2)
 
+        case "display":
+            ctx.fill(Path(roundedRect: CGRect(x: 8, y: 16, width: 48, height: 30), cornerRadius: 5),
+                     with: .color(Color(hex: 0x1A1F28)))
+            ctx.stroke(Path(roundedRect: CGRect(x: 8, y: 16, width: 48, height: 30), cornerRadius: 5),
+                       with: .color(metal), lineWidth: 1.5)
+            ctx.fill(Path(roundedRect: CGRect(x: 13, y: 21, width: 38, height: 16), cornerRadius: 2),
+                     with: .color(Color(hex: 0x0F3A46)))
+            ctx.fill(Path(roundedRect: CGRect(x: 17, y: 25, width: 14, height: 3), cornerRadius: 1.5),
+                     with: .color(Color(hex: 0x38BDF8).opacity(0.85)))
+            ctx.fill(Path(roundedRect: CGRect(x: 17, y: 31, width: 22, height: 2.5), cornerRadius: 1.2),
+                     with: .color(Color(hex: 0x2E5C68)))
+            ctx.fill(Path(ellipseIn: CGRect(x: 44, y: 40, width: 7, height: 7)),
+                     with: .color(.accent))
+            var cable = Path()
+            cable.move(to: CGPoint(x: 32, y: 46))
+            cable.addCurve(to: CGPoint(x: 30, y: 58),
+                           control1: CGPoint(x: 42, y: 50),
+                           control2: CGPoint(x: 20, y: 52))
+            ctx.stroke(cable, with: .color(Color(hex: 0x2C313C)), lineWidth: 3)
+
+        case "stlink":
+            ctx.fill(Path(roundedRect: CGRect(x: 8, y: 22, width: 34, height: 20), cornerRadius: 3),
+                     with: .color(Color(hex: 0x1E4E8C)))
+            ctx.fill(Path(roundedRect: CGRect(x: 42, y: 26, width: 12, height: 12), cornerRadius: 1.5),
+                     with: .color(metal))
+            ctx.fill(Path(roundedRect: CGRect(x: 12, y: 26, width: 8, height: 12), cornerRadius: 1),
+                     with: .color(Color(hex: 0x101318)))
+            for index in 0..<4 {
+                let x = 13 + CGFloat(index) * 3.4
+                ctx.fill(Path(ellipseIn: CGRect(x: x, y: 30, width: 2.2, height: 2.2)),
+                         with: .color(.accent))
+            }
+            let wires: [Color] = [Color(hex: 0xFFD400), Color(hex: 0x38BDF8), Color(hex: 0x8B97AB)]
+            for index in 0..<3 {
+                let x = 46 + CGFloat(index) * 4
+                var wire = Path()
+                wire.move(to: CGPoint(x: x, y: 38))
+                wire.addCurve(to: CGPoint(x: x + 2, y: 56),
+                              control1: CGPoint(x: x + 6, y: 44),
+                              control2: CGPoint(x: x - 2, y: 50))
+                ctx.stroke(wire, with: .color(wires[index]), lineWidth: 2)
+            }
+
+        case "torx":
+            ctx.fill(Path(roundedRect: CGRect(x: 16, y: 10, width: 14, height: 26), cornerRadius: 5),
+                     with: .color(Color(hex: 0xE8762C)))
+            for index in 0..<3 {
+                ctx.fill(Path(roundedRect: CGRect(x: 18, y: 14 + CGFloat(index) * 6, width: 10, height: 2), cornerRadius: 1),
+                         with: .color(Color(hex: 0x23262C)))
+            }
+            ctx.fill(Path(roundedRect: CGRect(x: 19, y: 36, width: 8, height: 14), cornerRadius: 2),
+                     with: .color(metal))
+            var tip = Path()
+            tip.move(to: CGPoint(x: 19, y: 50))
+            tip.addLine(to: CGPoint(x: 23, y: 58))
+            tip.addLine(to: CGPoint(x: 27, y: 50))
+            tip.closeSubpath()
+            ctx.fill(tip, with: .color(Color(hex: 0xC8CDD6)))
+            ctx.stroke(Path(ellipseIn: CGRect(x: 34, y: 40, width: 10, height: 10)),
+                       with: .color(.accent.opacity(0.7)), lineWidth: 1.5)
+
         default:
             break
         }
