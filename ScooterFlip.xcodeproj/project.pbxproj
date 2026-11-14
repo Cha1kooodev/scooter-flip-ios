@@ -18,6 +18,8 @@
 		1B0000000000000000000038 /* PartsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B0000000000000000000028 /* PartsView.swift */; };
 		1B0000000000000000000039 /* NumbersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B0000000000000000000029 /* NumbersView.swift */; };
 		1B000000000000000000003A /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B000000000000000000002A /* ProfileView.swift */; };
+		1B000000000000000000003B /* SharingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B000000000000000000002B /* SharingView.swift */; };
+		1B000000000000000000003C /* StrippingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B000000000000000000002C /* StrippingView.swift */; };
 		1B000000000000000000003F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 1B000000000000000000002F /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
@@ -34,6 +36,8 @@
 		1B0000000000000000000028 /* PartsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PartsView.swift; sourceTree = "<group>"; };
 		1B0000000000000000000029 /* NumbersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NumbersView.swift; sourceTree = "<group>"; };
 		1B000000000000000000002A /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
+		1B000000000000000000002B /* SharingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharingView.swift; sourceTree = "<group>"; };
+		1B000000000000000000002C /* StrippingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StrippingView.swift; sourceTree = "<group>"; };
 		1B000000000000000000002F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -78,6 +82,8 @@
 				1B0000000000000000000028 /* PartsView.swift */,
 				1B0000000000000000000029 /* NumbersView.swift */,
 				1B000000000000000000002A /* ProfileView.swift */,
+				1B000000000000000000002B /* SharingView.swift */,
+				1B000000000000000000002C /* StrippingView.swift */,
 				1B000000000000000000002F /* Assets.xcassets */,
 			);
 			path = ScooterFlip;
@@ -163,6 +169,8 @@
 				1B0000000000000000000038 /* PartsView.swift in Sources */,
 				1B0000000000000000000039 /* NumbersView.swift in Sources */,
 				1B000000000000000000003A /* ProfileView.swift in Sources */,
+				1B000000000000000000003B /* SharingView.swift in Sources */,
+				1B000000000000000000003C /* StrippingView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

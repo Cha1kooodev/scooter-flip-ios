@@ -126,6 +126,7 @@ enum ScooterCatalog {
         ScooterModel(id: "ninebot-g2", name: "Ninebot KickScooter Max G2", kind: .personal, basePrice: 68_000, style: ninebotBig),
         ScooterModel(id: "ninebot-gt1", name: "Ninebot KickScooter GT1", kind: .personal, basePrice: 120_000, style: ScooterStyle(bodyHex: 0x262B36, accentHex: 0xF2C230, bigWheels: true, suspension: true)),
         ScooterModel(id: "ninebot-gt2", name: "Ninebot KickScooter GT2", kind: .personal, basePrice: 165_000, style: ScooterStyle(bodyHex: 0x22262E, accentHex: 0xF2C230, bigWheels: true, suspension: true)),
+        ScooterModel(id: "ninebot-zt3-pro", name: "Ninebot KickScooter ZT3 Pro", kind: .personal, basePrice: 88_000, style: ScooterStyle(bodyHex: 0x232833, accentHex: 0xE23B3B, offroad: true, bigWheels: true, suspension: true)),
 
         // Kugoo
         ScooterModel(id: "kugoo-s3", name: "Kugoo S3", kind: .personal, basePrice: 14_000, style: kugoo),
@@ -463,6 +464,21 @@ struct OwnedScooter: Identifiable, Codable, Equatable {
     func has(_ upgrade: UpgradeKind) -> Bool {
         upgrades.contains(upgrade)
     }
+}
+
+/// Шеринговый самокат, найденный «на улице» для разборки.
+struct StreetUnit: Identifiable {
+    let id = UUID()
+    let modelID: String
+    let address: String
+    let plate: NumberPlate?
+
+    var model: ScooterModel { ScooterCatalog.model(modelID) }
+}
+
+enum StripResult {
+    case success([PartKind])
+    case caught
 }
 
 struct Listing: Identifiable, Codable {

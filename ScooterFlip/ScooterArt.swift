@@ -1,5 +1,52 @@
 import SwiftUI
 
+/// Фотографии, которые подставились в карточки. Остальные модели рисуются.
+enum ScooterPhoto {
+    static let map: [String: String] = [
+        "ninebot-snsc20": "photo-snsc",
+        "ninebot-snsc22": "photo-snsc",
+        "ninebot-snsc23": "photo-snsc",
+        "ninebot-snsc24": "photo-snsc",
+        "ninebot-g2": "photo-ninebot-g2",
+        "ninebot-g30p": "photo-ninebot-g30",
+        "ninebot-g30d": "photo-ninebot-g30",
+        "ninebot-zt3-pro": "photo-ninebot-zt3",
+        "ninebot-s90l": "photo-ninebot-s90l",
+        "ninebot-es2-es4": "photo-ninebot-es",
+        "kugoo-g2-pro": "photo-kugoo-g2-pro",
+        "kugoo-s3": "photo-kugoo-s3",
+    ]
+
+    static func name(for modelID: String) -> String? {
+        map[modelID]
+    }
+}
+
+/// Показывает фото, если оно есть, иначе рисованный самокат.
+struct ScooterVisual: View {
+    let model: ScooterModel
+    var plate: String? = nil
+
+    var body: some View {
+        if let photo = ScooterPhoto.name(for: model.id) {
+            ZStack {
+                LinearGradient(
+                    colors: [Color(hex: 0xF6F8FC), Color(hex: 0xE3E8F1)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                Image(photo)
+                    .resizable()
+                    .scaledToFit()
+                    .padding(3)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+        } else {
+            ScooterArt(model: model, plate: plate)
+        }
+    }
+}
+
 /// Рисованный вид самоката сбоку. Масштабируется под любой размер.
 struct ScooterArt: View {
     let model: ScooterModel

@@ -261,7 +261,7 @@ struct ArtBanner: View {
                 startPoint: .top,
                 endPoint: .bottom
             )
-            ScooterArt(model: model, plate: plate)
+            ScooterVisual(model: model, plate: plate)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 4)
         }

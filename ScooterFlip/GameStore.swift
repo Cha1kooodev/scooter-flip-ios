@@ -21,6 +21,70 @@ struct GameState: Codable {
     var totalSpent: Int
     var totalEarned: Int
 
+    // Разборка шеринга
+    var strips: Int
+    var caught: Int
+
+    enum CodingKeys: String, CodingKey {
+        case money, scooters, listings, parts, profit, soldCount, repairs, rolls
+        case bestNumber, playerName, startedAt, totalBought, totalSpent, totalEarned
+        case strips, caught
+    }
+
+    init(money: Int,
+         scooters: [OwnedScooter],
+         listings: [Listing],
+         parts: [String: Int],
+         profit: Int,
+         soldCount: Int,
+         repairs: Int,
+         rolls: Int,
+         bestNumber: NumberPlate?,
+         playerName: String,
+         startedAt: Date,
+         totalBought: Int,
+         totalSpent: Int,
+         totalEarned: Int,
+         strips: Int = 0,
+         caught: Int = 0) {
+        self.money = money
+        self.scooters = scooters
+        self.listings = listings
+        self.parts = parts
+        self.profit = profit
+        self.soldCount = soldCount
+        self.repairs = repairs
+        self.rolls = rolls
+        self.bestNumber = bestNumber
+        self.playerName = playerName
+        self.startedAt = startedAt
+        self.totalBought = totalBought
+        self.totalSpent = totalSpent
+        self.totalEarned = totalEarned
+        self.strips = strips
+        self.caught = caught
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        money = try container.decode(Int.self, forKey: .money)
+        scooters = try container.decode([OwnedScooter].self, forKey: .scooters)
+        listings = try container.decode([Listing].self, forKey: .listings)
+        parts = try container.decode([String: Int].self, forKey: .parts)
+        profit = try container.decode(Int.self, forKey: .profit)
+        soldCount = try container.decode(Int.self, forKey: .soldCount)
+        repairs = try container.decode(Int.self, forKey: .repairs)
+        rolls = try container.decode(Int.self, forKey: .rolls)
+        bestNumber = try container.decodeIfPresent(NumberPlate.self, forKey: .bestNumber)
+        playerName = try container.decodeIfPresent(String.self, forKey: .playerName) ?? "Райдер"
+        startedAt = try container.decodeIfPresent(Date.self, forKey: .startedAt) ?? Date()
+        totalBought = try container.decodeIfPresent(Int.self, forKey: .totalBought) ?? 0
+        totalSpent = try container.decodeIfPresent(Int.self, forKey: .totalSpent) ?? 0
+        totalEarned = try container.decodeIfPresent(Int.self, forKey: .totalEarned) ?? 0
+        strips = try container.decodeIfPresent(Int.self, forKey: .strips) ?? 0
+        caught = try container.decodeIfPresent(Int.self, forKey: .caught) ?? 0
+    }
+
     static func fresh() -> GameState {
         let starter = OwnedScooter(
             modelID: "kugoo-s3",
@@ -108,6 +172,7 @@ struct LevelTier {
 final class GameStore: ObservableObject {
     @Published private(set) var state: GameState
     @Published var toast: String?
+    @Published private(set) var streetUnits: [StreetUnit] = []
 
     private let saveKey = "scooter-flip-save-v2"
     private var toastWork: DispatchWorkItem?
@@ -119,6 +184,7 @@ final class GameStore: ObservableObject {
             state = GameState.fresh()
             regenerateMarket(free: true)
         }
+        refreshStreet()
     }
 
     // MARK: Доступ
@@ -145,6 +211,10 @@ final class GameStore: ObservableObject {
 
     func stock(of part: PartKind) -> Int {
         state.parts[part.rawValue] ?? 0
+    }
+
+    var totalParts: Int {
+        state.parts.values.reduce(0, +)
     }
 
     // MARK: Цена
@@ -525,6 +595,64 @@ final class GameStore: ObservableObject {
         let start = calendar.startOfDay(for: state.startedAt)
         let today = calendar.startOfDay(for: Date())
         return max(0, calendar.dateComponents([.day], from: start, to: today).day ?? 0)
+    }
+
+    // MARK: Разборка шеринга
+
+    static let sharingLootPool: [PartKind] = [
+        .battery, .motor, .controller, .motor, .battery,
+        .controller, .tire, .pads, .bearing, .disc,
+    ]
+
+    private static let stripModels = [
+        "ninebot-g30p", "ninebot-g2", "ninebot-s90l",
+        "ninebot-snsc20", "ninebot-snsc22", "ninebot-snsc23", "ninebot-snsc24",
+    ]
+
+    private static let stripAddresses = [
+        "ул. Ленина, 12", "парк у метро", "набережная, 4",
+        "ТЦ «Галерея»", "школа №7", "сквер у вокзала", "двор на Пушкина",
+    ]
+
+    func refreshStreet() {
+        var units: [StreetUnit] = []
+        for _ in 0..<3 {
+            let modelID = Self.stripModels.randomElement() ?? "ninebot-g2"
+            units.append(
+                StreetUnit(
+                    modelID: modelID,
+                    address: Self.stripAddresses.randomElement() ?? "улица",
+                    plate: NumberFactory.make(NumberFactory.rollRarity())
+                )
+            )
+        }
+        streetUnits = units
+    }
+
+    /// Возвращает добычу или сигнал, что поймала служба безопасности.
+    /// Шанс поимки — 30%, тогда изымаются все самокаты из гаража.
+    func strip(_ unit: StreetUnit) -> StripResult {
+        streetUnits.removeAll { $0.id == unit.id }
+        state.strips += 1
+
+        if Int.random(in: 0..<100) < 30 {
+            let lost = state.scooters.count
+            state.scooters.removeAll()
+            state.caught += 1
+            save()
+            showToast("СБ изъяла все самокаты (\(lost) шт.)")
+            return .caught
+        }
+
+        let count = Int.random(in: 1...2)
+        var loot: [PartKind] = []
+        for _ in 0..<count {
+            let part = Self.sharingLootPool.randomElement() ?? .motor
+            state.parts[part.rawValue] = stock(of: part) + 1
+            loot.append(part)
+        }
+        save()
+        return .success(loot)
     }
 
     // MARK: Тост

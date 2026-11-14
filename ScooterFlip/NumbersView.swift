@@ -14,14 +14,8 @@ struct NumbersView: View {
     @State private var result: NumberResult?
 
     var body: some View {
-        ZStack {
-            Color.appBg.ignoresSafeArea()
-
-            VStack(spacing: 0) {
-                ScreenHeader(title: "Номера", subtitle: "Редкость решает цену")
-
-                ScrollView {
-                    VStack(spacing: 12) {
+        ScrollView {
+            VStack(spacing: 12) {
                         InfoCard(
                             text: "Номера выбиваются только на шеринговых самокатах. " +
                                   "Чем реже номер — тем дороже самокат: редкий даёт +30 000 ₽, " +
@@ -58,11 +52,9 @@ struct NumbersView: View {
                                 .opacity(rollingID == nil || rollingID == scooter.id ? 1 : 0.55)
                             }
                         }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 26)
-                }
             }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 26)
         }
         .sheet(item: $result) { item in
             NumberResultSheet(result: item)

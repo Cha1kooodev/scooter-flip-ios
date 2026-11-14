@@ -201,6 +201,8 @@ struct ProfileView: View {
                     value: store.state.bestNumber?.code ?? "—",
                     color: store.state.bestNumber?.rarity.color ?? .muted
                 )
+                StatTile(icon: "wrench.and.screwdriver.fill", title: "Скручено", value: "\(store.state.strips)", color: .textPrimary)
+                StatTile(icon: "shield.fill", title: "Поймала СБ", value: "\(store.state.caught)", color: .bad)
             }
         }
         .cardStyle()

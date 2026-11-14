@@ -293,7 +293,7 @@ struct UpgradeInstallSheet: View {
         let affordable = store.state.money >= cost
 
         return HStack(spacing: 10) {
-            ScooterArt(model: scooter.model, plate: scooter.number?.code)
+            ScooterVisual(model: scooter.model, plate: scooter.number?.code)
                 .frame(width: 88, height: 46)
                 .background(Color.panel2)
                 .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))

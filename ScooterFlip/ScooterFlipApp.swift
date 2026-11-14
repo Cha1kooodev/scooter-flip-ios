@@ -26,8 +26,8 @@ struct RootView: View {
             PartsView()
                 .tabItem { Label("Магазин", systemImage: "shippingbox.fill") }
 
-            NumbersView()
-                .tabItem { Label("Номера", systemImage: "number") }
+            SharingView()
+                .tabItem { Label("Шеринг", systemImage: "number") }
 
             ProfileView()
                 .tabItem { Label("Профиль", systemImage: "person.crop.circle.fill") }
