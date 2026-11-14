@@ -42,7 +42,18 @@ struct ScooterVisual: View {
             }
             .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
         } else {
-            ScooterArt(model: model, plate: plate)
+            ZStack {
+                LinearGradient(
+                    colors: [Color(hex: 0x171C26), Color(hex: 0x0D1117)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                Image("photo-default")
+                    .resizable()
+                    .scaledToFit()
+                    .padding(4)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
         }
     }
 }
