@@ -14,6 +14,13 @@ struct GameState: Codable {
     var rolls: Int
     var bestNumber: NumberPlate?
 
+    // Профиль игрока
+    var playerName: String
+    var startedAt: Date
+    var totalBought: Int
+    var totalSpent: Int
+    var totalEarned: Int
+
     static func fresh() -> GameState {
         let starter = OwnedScooter(
             modelID: "kugoo-s3",
@@ -33,15 +40,19 @@ struct GameState: Codable {
             soldCount: 0,
             repairs: 0,
             rolls: 0,
-            bestNumber: nil
+            bestNumber: nil,
+            playerName: "Райдер",
+            startedAt: Date(),
+            totalBought: 1,
+            totalSpent: 12_000,
+            totalEarned: 0
         )
     }
 }
 
-/// Виды тюнинга.
+/// Программный тюнинг.
 enum TuneKind: String, CaseIterable, Identifiable {
     case firmware
-    case battery
     case custom
 
     var id: String { rawValue }
@@ -49,15 +60,13 @@ enum TuneKind: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .firmware: return "Прошивка"
-        case .battery:  return "Апгрейд батареи"
-        case .custom:   return "Кастом-тюнинг"
+        case .custom:   return "Стайлинг"
         }
     }
 
     var icon: String {
         switch self {
         case .firmware: return "bolt.horizontal.fill"
-        case .battery:  return "battery.100"
         case .custom:   return "paintbrush.fill"
         }
     }
@@ -65,7 +74,6 @@ enum TuneKind: String, CaseIterable, Identifiable {
     var effect: String {
         switch self {
         case .firmware: return "+12% к цене, но сажает батарею"
-        case .battery:  return "+15% к цене, батарея 100%"
         case .custom:   return "+6% к цене и внешний вид"
         }
     }
@@ -78,6 +86,22 @@ struct RollOutcome: Identifiable {
     let cost: Int
 }
 
+/// Уровень игрока зависит от чистой прибыли.
+struct LevelTier {
+    let title: String
+    let need: Int
+
+    static let all: [LevelTier] = [
+        LevelTier(title: "Новичок", need: 0),
+        LevelTier(title: "Курьер", need: 25_000),
+        LevelTier(title: "Механик", need: 75_000),
+        LevelTier(title: "Перекуп", need: 200_000),
+        LevelTier(title: "Барыга", need: 500_000),
+        LevelTier(title: "Магнат", need: 1_200_000),
+        LevelTier(title: "Легенда рынка", need: 3_000_000),
+    ]
+}
+
 // MARK: - Игровой склад
 
 @MainActor
@@ -85,7 +109,7 @@ final class GameStore: ObservableObject {
     @Published private(set) var state: GameState
     @Published var toast: String?
 
-    private let saveKey = "scooter-flip-save-v1"
+    private let saveKey = "scooter-flip-save-v2"
     private var toastWork: DispatchWorkItem?
 
     init() {
@@ -103,10 +127,6 @@ final class GameStore: ObservableObject {
         state.scooters.first { $0.id == id }
     }
 
-    func listing(_ id: UUID) -> Listing? {
-        state.listings.first { $0.id == id }
-    }
-
     var sharingScooters: [OwnedScooter] {
         state.scooters.filter { $0.model.kind == .sharing }
     }
@@ -117,6 +137,10 @@ final class GameStore: ObservableObject {
 
     var invested: Int {
         state.scooters.reduce(0) { $0 + $1.boughtPrice }
+    }
+
+    var netWorth: Int {
+        state.money + fleetValue
     }
 
     func stock(of part: PartKind) -> Int {
@@ -137,11 +161,13 @@ final class GameStore: ObservableObject {
         let afterBattery = Int(Double(afterCondition) * battF)
         let afterMileage = Int(Double(afterBattery) * mileF)
 
-        var tuning = 0.0
-        if scooter.firmware { tuning += Double(afterMileage) * 0.12 }
-        if scooter.bigBattery { tuning += Double(afterMileage) * 0.15 }
-        if scooter.custom { tuning += Double(afterMileage) * 0.06 }
-        let tuningValue = Int(tuning)
+        var tuningRate = 0.0
+        if scooter.firmware { tuningRate += 0.12 }
+        if scooter.custom { tuningRate += 0.06 }
+        let tuningValue = Int(Double(afterMileage) * tuningRate)
+
+        let upgradesRate = scooter.upgrades.reduce(0.0) { $0 + $1.valueBonus }
+        let upgradesValue = Int(Double(afterMileage) * upgradesRate)
 
         let numberValue = scooter.number?.rarity.bonus ?? 0
 
@@ -151,8 +177,9 @@ final class GameStore: ObservableObject {
             battery: afterBattery - afterCondition,
             mileage: afterMileage - afterBattery,
             tuning: tuningValue,
+            upgrades: upgradesValue,
             number: numberValue,
-            total: afterMileage + tuningValue + numberValue
+            total: afterMileage + tuningValue + upgradesValue + numberValue
         )
     }
 
@@ -183,6 +210,7 @@ final class GameStore: ObservableObject {
                 return
             }
             state.money -= cost
+            state.totalSpent += cost
         }
 
         var fresh: [Listing] = []
@@ -238,6 +266,9 @@ final class GameStore: ObservableObject {
         }
 
         state.money -= listing.price
+        state.totalSpent += listing.price
+        state.totalBought += 1
+
         let scooter = OwnedScooter(
             modelID: listing.modelID,
             condition: listing.condition,
@@ -284,6 +315,7 @@ final class GameStore: ObservableObject {
         }
 
         state.money -= cost
+        state.totalSpent += cost
         state.parts[part.rawValue] = max(0, stock(of: part) - 1)
         state.scooters[index].condition = 100
         state.scooters[index].battery = max(state.scooters[index].battery, 60)
@@ -293,11 +325,12 @@ final class GameStore: ObservableObject {
         showToast("Отремонтировал: \(scooter.model.name)")
     }
 
+    // MARK: Тюнинг
+
     func tuneCost(_ kind: TuneKind, for scooter: OwnedScooter) -> Int {
         let base = scooter.model.basePrice
         switch kind {
         case .firmware: return max(2_500, Int(Double(base) * 0.04))
-        case .battery:  return max(9_000, Int(Double(base) * 0.15))
         case .custom:   return max(3_000, Int(Double(base) * 0.05))
         }
     }
@@ -305,7 +338,6 @@ final class GameStore: ObservableObject {
     func isTuned(_ kind: TuneKind, _ scooter: OwnedScooter) -> Bool {
         switch kind {
         case .firmware: return scooter.firmware
-        case .battery:  return scooter.bigBattery
         case .custom:   return scooter.custom
         }
     }
@@ -322,16 +354,55 @@ final class GameStore: ObservableObject {
         }
 
         state.money -= cost
+        state.totalSpent += cost
         switch kind {
         case .firmware:
             state.scooters[index].firmware = true
             state.scooters[index].battery = max(30, state.scooters[index].battery - 4)
-        case .battery:
-            state.scooters[index].bigBattery = true
-            state.scooters[index].battery = 100
         case .custom:
             state.scooters[index].custom = true
         }
+        save()
+        showToast("\(kind.title) установлен")
+    }
+
+    // MARK: Апгрейды
+
+    func upgradeCost(_ kind: UpgradeKind, for scooter: OwnedScooter) -> Int {
+        max(1_500, roundToHundred(Int(Double(scooter.model.basePrice) * kind.priceFactor)))
+    }
+
+    func hasUpgrade(_ kind: UpgradeKind, _ scooter: OwnedScooter) -> Bool {
+        scooter.has(kind)
+    }
+
+    func installUpgrade(_ kind: UpgradeKind, id: UUID) {
+        guard let index = state.scooters.firstIndex(where: { $0.id == id }) else { return }
+        let scooter = state.scooters[index]
+        guard !scooter.has(kind) else {
+            showToast("Этот апгрейд уже стоит")
+            return
+        }
+
+        let cost = upgradeCost(kind, for: scooter)
+        guard state.money >= cost else {
+            showToast("Не хватает \(rub(cost - state.money))")
+            return
+        }
+
+        state.money -= cost
+        state.totalSpent += cost
+        state.scooters[index].upgrades.append(kind)
+
+        switch kind {
+        case .battery:
+            state.scooters[index].battery = 100
+        case .motor:
+            state.scooters[index].condition = min(100, state.scooters[index].condition + 3)
+        default:
+            break
+        }
+
         save()
         showToast("\(kind.title) установлен")
     }
@@ -343,6 +414,7 @@ final class GameStore: ObservableObject {
         let price = roundToHundred(Int(Double(value) * Double.random(in: 0.95...1.07)))
 
         state.money += price
+        state.totalEarned += price
         state.profit += price - scooter.boughtPrice
         state.soldCount += 1
         state.scooters.remove(at: index)
@@ -386,6 +458,7 @@ final class GameStore: ObservableObject {
         }
 
         state.money -= outcome.cost
+        state.totalSpent += outcome.cost
         state.scooters[index].number = outcome.plate
         state.rolls += 1
         if outcome.plate.rarity.rank > (state.bestNumber?.rarity.rank ?? -1) {
@@ -402,9 +475,56 @@ final class GameStore: ObservableObject {
             return
         }
         state.money -= part.price
+        state.totalSpent += part.price
         state.parts[part.rawValue] = stock(of: part) + 1
         save()
         showToast("Купил: \(part.title)")
+    }
+
+    // MARK: Профиль
+
+    func setPlayerName(_ name: String) {
+        let trimmed = String(name.prefix(18))
+        state.playerName = trimmed
+        save()
+    }
+
+    func resetProgress() {
+        state = GameState.fresh()
+        regenerateMarket(free: true)
+        showToast("Прогресс сброшен")
+    }
+
+    var levelIndex: Int {
+        var result = 0
+        for (index, tier) in LevelTier.all.enumerated() where state.profit >= tier.need {
+            result = index
+        }
+        return result
+    }
+
+    var level: LevelTier {
+        LevelTier.all[levelIndex]
+    }
+
+    var nextLevel: LevelTier? {
+        let next = levelIndex + 1
+        return next < LevelTier.all.count ? LevelTier.all[next] : nil
+    }
+
+    /// Прогресс до следующего уровня, 0...1.
+    var levelProgress: Double {
+        guard let next = nextLevel else { return 1 }
+        let from = level.need
+        let span = max(1, next.need - from)
+        return min(1, max(0, Double(state.profit - from) / Double(span)))
+    }
+
+    var daysInGame: Int {
+        let calendar = Calendar.current
+        let start = calendar.startOfDay(for: state.startedAt)
+        let today = calendar.startOfDay(for: Date())
+        return max(0, calendar.dateComponents([.day], from: start, to: today).day ?? 0)
     }
 
     // MARK: Тост
@@ -423,17 +543,19 @@ final class GameStore: ObservableObject {
         if battery < 55 { return .battery }
         let roll = Int.random(in: 0..<100)
         switch roll {
-        case ..<32: return .tire
-        case ..<64: return .pads
-        case ..<80: return .controller
-        case ..<94: return .motor
+        case ..<24: return .tire
+        case ..<46: return .pads
+        case ..<62: return .controller
+        case ..<74: return .motor
+        case ..<86: return .bearing
+        case ..<94: return .disc
         default:    return .battery
         }
     }
 
     private static func sellerName(for kind: ScooterKind) -> String {
-        let personal = ["Артём", "Даня", "Серёга", "Марина", "Костя", "Дядя Вова", "Лёха", "Настя"]
-        let sharing = ["Сервис аренды", "Прокат №1", "Склад шеринга", "Мастерская парка"]
+        let personal = ["Артём", "Даня", "Серёга", "Марина", "Костя", "Дядя Вова", "Лёха", "Настя", "Илья", "Витя"]
+        let sharing = ["Сервис аренды", "Прокат №1", "Склад шеринга", "Мастерская парка", "Кикшеринг-склад"]
         let pool = kind == .sharing ? sharing : personal
         return pool.randomElement() ?? "Продавец"
     }
@@ -444,7 +566,7 @@ final class GameStore: ObservableObject {
     }
 
     private static func loadState() -> GameState? {
-        guard let data = UserDefaults.standard.data(forKey: "scooter-flip-save-v1") else {
+        guard let data = UserDefaults.standard.data(forKey: "scooter-flip-save-v2") else {
             return nil
         }
         return try? JSONDecoder().decode(GameState.self, from: data)

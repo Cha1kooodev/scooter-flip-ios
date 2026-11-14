@@ -62,9 +62,9 @@ struct GarageCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 11) {
-                ScooterIconTile(model: scooter.model, size: 52)
+            ArtBanner(model: scooter.model, plate: scooter.number?.code, height: 86)
 
+            HStack(alignment: .top, spacing: 8) {
                 VStack(alignment: .leading, spacing: 5) {
                     Text(scooter.model.name)
                         .font(.system(size: 14, weight: .semibold))
@@ -73,10 +73,12 @@ struct GarageCard: View {
                         .fixedSize(horizontal: false, vertical: true)
 
                     HStack(spacing: 5) {
-                        Tag(text: scooter.model.kind.title,
-                            color: scooter.model.kind.color)
+                        Tag(text: scooter.model.kind.title, color: scooter.model.kind.color)
                         if let number = scooter.number {
                             NumberBadge(plate: number, compact: true)
+                        }
+                        if !scooter.upgrades.isEmpty {
+                            Tag(text: "железо \(scooter.upgrades.count)", color: .good)
                         }
                     }
                 }
@@ -97,11 +99,10 @@ struct GarageCard: View {
 
             HStack {
                 if scooter.condition < 99 {
-                    Label("Нужна деталь: \(part.title)",
-                          systemImage: "wrench.and.screwdriver.fill")
+                    Label("Нужна деталь: \(part.title)", systemImage: "wrench.and.screwdriver.fill")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(.warn)
-                } else if scooter.firmware || scooter.bigBattery || scooter.custom {
+                } else if scooter.firmware || scooter.custom || !scooter.upgrades.isEmpty {
                     Label("Есть тюнинг", systemImage: "sparkles")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(.good)
@@ -136,6 +137,7 @@ struct ScooterDetailView: View {
                             priceCard(scooter)
                             repairCard(scooter)
                             tuningCard(scooter)
+                            hardwareCard(scooter)
                             shareHint(scooter)
                             sellButton(scooter)
                         }
@@ -175,23 +177,22 @@ struct ScooterDetailView: View {
 
     private func header(_ scooter: OwnedScooter) -> some View {
         VStack(spacing: 10) {
-            HStack(spacing: 12) {
-                ScooterIconTile(model: scooter.model, size: 64)
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(scooter.model.name)
-                        .font(.system(size: 17, weight: .bold))
-                        .foregroundColor(.textPrimary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    HStack(spacing: 5) {
-                        Tag(text: scooter.model.kind.title,
-                            color: scooter.model.kind.color)
-                        if let number = scooter.number {
-                            NumberBadge(plate: number)
-                        }
+            ArtBanner(model: scooter.model, plate: scooter.number?.code, height: 120)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(scooter.model.name)
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundColor(.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                HStack(spacing: 5) {
+                    Tag(text: scooter.model.kind.title, color: scooter.model.kind.color)
+                    if let number = scooter.number {
+                        NumberBadge(plate: number)
                     }
                 }
-                Spacer(minLength: 0)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             HStack(spacing: 6) {
                 StatChip(title: "Состояние", value: "\(Int(scooter.condition))%")
@@ -219,7 +220,10 @@ struct ScooterDetailView: View {
                 row("Пробег", signedRub(b.mileage), .warn)
             }
             if b.tuning > 0 {
-                row("Тюнинг", signedRub(b.tuning), .good)
+                row("Прошивка и стайлинг", signedRub(b.tuning), .good)
+            }
+            if b.upgrades > 0 {
+                row("Железо", signedRub(b.upgrades), .good)
             }
             if b.number > 0 {
                 row("Номер", signedRub(b.number), scooter.number?.rarity.color ?? .good)
@@ -267,7 +271,7 @@ struct ScooterDetailView: View {
                     store.repair(id: scooter.id)
                 }
             } else {
-                Text("Состояние 100%. Можно ставить тюнинг и продавать.")
+                Text("Состояние 100%. Можно ставить железо и продавать.")
                     .font(.system(size: 12))
                     .foregroundColor(.muted)
             }
@@ -277,7 +281,7 @@ struct ScooterDetailView: View {
 
     private func tuningCard(_ scooter: OwnedScooter) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            SectionTitle(text: "Тюнинг и прошивка")
+            SectionTitle(text: "Прошивка и стайлинг")
 
             ForEach(TuneKind.allCases) { kind in
                 let done = store.isTuned(kind, scooter)
@@ -322,6 +326,66 @@ struct ScooterDetailView: View {
             }
         }
         .cardStyle()
+    }
+
+    private func hardwareCard(_ scooter: OwnedScooter) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                SectionTitle(text: "Железо")
+                Spacer()
+                Text("апгрейды навсегда")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundColor(.muted)
+            }
+
+            ForEach(UpgradeKind.allCases) { kind in
+                upgradeRow(kind, scooter)
+            }
+        }
+        .cardStyle()
+    }
+
+    private func upgradeRow(_ kind: UpgradeKind, _ scooter: OwnedScooter) -> some View {
+        let installed = store.hasUpgrade(kind, scooter)
+        let cost = store.upgradeCost(kind, for: scooter)
+        let affordable = store.state.money >= cost
+
+        return HStack(spacing: 10) {
+            PartArt(key: kind.artKey)
+                .frame(width: 36, height: 36)
+                .padding(4)
+                .background(Color.panel2)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(kind.title)
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .foregroundColor(.textPrimary)
+                Text(kind.detail)
+                    .font(.system(size: 9.5))
+                    .foregroundColor(.muted)
+                    .lineLimit(1)
+                Text(kind.bonusText)
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundColor(installed ? .good : .accent.opacity(0.9))
+            }
+
+            Spacer(minLength: 4)
+
+            Button {
+                store.installUpgrade(kind, id: scooter.id)
+            } label: {
+                Text(installed ? "Стоит" : rub(cost))
+                    .font(.system(size: 10.5, weight: .bold))
+                    .foregroundColor(installed ? .good : (affordable ? .appBg : .muted))
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 6)
+                    .background(installed ? Color.good.opacity(0.15) : (affordable ? Color.accent : Color.panel2))
+                    .clipShape(Capsule())
+            }
+            .buttonStyle(PressableStyle())
+            .disabled(installed || !affordable)
+        }
     }
 
     @ViewBuilder

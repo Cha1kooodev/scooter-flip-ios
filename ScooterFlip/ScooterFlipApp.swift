@@ -24,10 +24,13 @@ struct RootView: View {
                 .tabItem { Label("Гараж", systemImage: "wrench.and.screwdriver.fill") }
 
             PartsView()
-                .tabItem { Label("Запчасти", systemImage: "shippingbox.fill") }
+                .tabItem { Label("Магазин", systemImage: "shippingbox.fill") }
 
             NumbersView()
                 .tabItem { Label("Номера", systemImage: "number") }
+
+            ProfileView()
+                .tabItem { Label("Профиль", systemImage: "person.crop.circle.fill") }
         }
         .tint(Color.accent)
         .preferredColorScheme(.dark)

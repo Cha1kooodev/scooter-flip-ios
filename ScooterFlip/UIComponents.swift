@@ -247,6 +247,66 @@ struct EmptyStateView: View {
     }
 }
 
+// MARK: - Большая иллюстрация
+
+struct ArtBanner: View {
+    let model: ScooterModel
+    var plate: String? = nil
+    var height: CGFloat = 96
+
+    var body: some View {
+        ZStack {
+            LinearGradient(
+                colors: [Color(hex: 0x161C27), Color(hex: 0x0D1117)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            ScooterArt(model: model, plate: plate)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+        }
+        .frame(height: height)
+        .frame(maxWidth: .infinity)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Color.line, lineWidth: 1)
+        )
+    }
+}
+
+// MARK: - Плитка статистики
+
+struct StatTile: View {
+    let icon: String
+    let title: String
+    let value: String
+    var color: Color = .textPrimary
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 5) {
+                Image(systemName: icon)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(color)
+                Text(title)
+                    .font(.system(size: 10))
+                    .foregroundColor(.muted)
+                    .lineLimit(1)
+            }
+            Text(value)
+                .font(.system(size: 15, weight: .bold, design: .rounded))
+                .foregroundColor(.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(10)
+        .background(Color.panel2)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+}
+
 // MARK: - Тост
 
 extension View {

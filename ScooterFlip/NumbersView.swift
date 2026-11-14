@@ -154,28 +154,24 @@ struct NumberScooterCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 11) {
-                ScooterIconTile(model: scooter.model, size: 48)
+            ArtBanner(model: scooter.model, plate: scooter.number?.code, height: 84)
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(scooter.model.name)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(.textPrimary)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(scooter.model.name)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.textPrimary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
 
-                    if let number = scooter.number {
-                        Text("\(number.rarity.title) · + \(rub(number.rarity.bonus)) к цене")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(number.rarity.color)
-                    } else {
-                        Text("Номер не выбит")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(.muted)
-                    }
+                if let number = scooter.number {
+                    Text("\(number.rarity.title) · + \(rub(number.rarity.bonus)) к цене")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(number.rarity.color)
+                } else {
+                    Text("Номер не выбит")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.muted)
                 }
-
-                Spacer(minLength: 0)
             }
 
             Text(displayCode)

@@ -13,7 +13,7 @@ struct MarketView: View {
                 ScrollView {
                     VStack(spacing: 12) {
                         InfoCard(
-                            text: "Покупай дешевле, чини, ставь тюнинг и продавай дороже. " +
+                            text: "Покупай дешевле, чини, ставь железо и продавай дороже. " +
                                   "Шеринговым моделям выбивай номера — редкость добавляет к цене."
                         )
 
@@ -68,37 +68,33 @@ struct ListingCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 11) {
-                ScooterIconTile(model: listing.model, size: 52)
+            ArtBanner(model: listing.model, plate: listing.number?.code, height: 98)
 
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(listing.model.name)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.textPrimary)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 5) {
+                Text(listing.model.name)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.textPrimary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
 
-                    HStack(spacing: 5) {
-                        Tag(text: listing.model.kind.title,
-                            color: listing.model.kind.color)
-                        if let number = listing.number {
-                            NumberBadge(plate: number, compact: true)
-                        }
+                HStack(spacing: 5) {
+                    Tag(text: listing.model.kind.title, color: listing.model.kind.color)
+                    if let number = listing.number {
+                        NumberBadge(plate: number, compact: true)
+                    }
+                    Spacer(minLength: 0)
+                    if isDeal {
+                        Text("🔥 выгодно")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(.good)
                     }
                 }
-
-                Spacer(minLength: 0)
             }
 
             HStack(alignment: .firstTextBaseline) {
                 Text("Цена")
                     .font(.system(size: 11))
                     .foregroundColor(.muted)
-                if isDeal {
-                    Text("🔥 выгодно")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundColor(.good)
-                }
                 Spacer()
                 Text(rub(listing.price))
                     .font(.system(size: 19, weight: .heavy))
@@ -136,7 +132,9 @@ struct ListingCard: View {
             }
 
             PrimaryActionButton(
-                title: canAfford ? "Купить за \(rub(listing.price))" : "Не хватает \(rub(listing.price - store.state.money))",
+                title: canAfford
+                    ? "Купить за \(rub(listing.price))"
+                    : "Не хватает \(rub(listing.price - store.state.money))",
                 icon: "cart.fill",
                 enabled: canAfford
             ) {
