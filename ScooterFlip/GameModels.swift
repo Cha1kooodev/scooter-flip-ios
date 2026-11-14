@@ -496,6 +496,12 @@ enum FlashJobKind: Identifiable, Equatable {
     }
 }
 
+/// Итог прошивки: 70% успех, 30% блок не отвечает.
+enum FlashResult {
+    case success
+    case failed
+}
+
 // MARK: - Тюнинг
 
 /// Железо: ставится на конкретный самокат и даёт процент к цене.

@@ -8,6 +8,7 @@ struct ScooterHotspotMap {
     let aspect: CGFloat
     let deck: CGRect
     let display: CGRect
+    let tracker: CGRect
 
     static func forModel(_ modelID: String) -> ScooterHotspotMap {
         switch modelID {
@@ -16,7 +17,8 @@ struct ScooterHotspotMap {
                 imageName: "photo-ninebot-s90l",
                 aspect: 715.0 / 1000.0,
                 deck: CGRect(x: 0.28, y: 0.67, width: 0.46, height: 0.14),
-                display: CGRect(x: 0.36, y: 0.16, width: 0.22, height: 0.10)
+                display: CGRect(x: 0.36, y: 0.16, width: 0.22, height: 0.10),
+                tracker: CGRect(x: 0.30, y: 0.36, width: 0.16, height: 0.16)
             )
         default:
             // SNSC 2.0–2.4 — общее фото.
@@ -24,7 +26,8 @@ struct ScooterHotspotMap {
                 imageName: "photo-snsc",
                 aspect: 1.0,
                 deck: CGRect(x: 0.33, y: 0.60, width: 0.47, height: 0.22),
-                display: CGRect(x: 0.28, y: 0.01, width: 0.26, height: 0.10)
+                display: CGRect(x: 0.28, y: 0.01, width: 0.26, height: 0.10),
+                tracker: CGRect(x: 0.30, y: 0.32, width: 0.16, height: 0.17)
             )
         }
     }
@@ -33,6 +36,8 @@ struct ScooterHotspotMap {
 // MARK: - Этапы разборки
 
 enum StripStep {
+    case tracker
+    case trackerBolts
     case deck
     case screwdriver
     case screws
@@ -49,15 +54,18 @@ struct StripGameView: View {
 
     let unit: StreetUnit
 
-    @State private var step: StripStep = .deck
+    @State private var step: StripStep = .tracker
     @State private var hint: String?
     @State private var showDeckHint = false
+    @State private var showTrackerHint = false
+    @State private var trackerBolts: Set<Int> = []
     @State private var removedScrews: Set<Int> = []
     @State private var target: Double = 0.5
     @State private var result: StripResult?
     @State private var done = false
 
     private var screwsLeft: Int { 4 - removedScrews.count }
+    private var trackerBoltsLeft: Int { 2 - trackerBolts.count }
 
     private var hotspots: ScooterHotspotMap { .forModel(unit.modelID) }
 
@@ -73,12 +81,14 @@ struct StripGameView: View {
                         resultView(result)
                     } else {
                         switch step {
-                        case .deck:        deckStep
-                        case .screwdriver: screwdriverStep
-                        case .screws:      screwsStep
-                        case .controller:  controllerStep
-                        case .display:     displayStep
-                        case .result:      EmptyView()
+                        case .tracker:      trackerStep
+                        case .trackerBolts: trackerBoltsStep
+                        case .deck:         deckStep
+                        case .screwdriver:  screwdriverStep
+                        case .screws:       screwsStep
+                        case .controller:   controllerStep
+                        case .display:      displayStep
+                        case .result:       EmptyView()
                         }
                     }
                 }
@@ -122,16 +132,128 @@ struct StripGameView: View {
 
     private var stepTitle: String {
         switch step {
-        case .deck:        return "Шаг 1 из 4 · найди деку"
-        case .screwdriver: return "Шаг 2 из 4 · вскрой деку"
-        case .screws:      return "Шаг 3 из 4 · сними контроллер"
-        case .controller:  return "Шаг 3 из 4 · контроллер снят"
-        case .display:     return "Шаг 4 из 4 · сними дисплей"
+        case .tracker, .trackerBolts:
+            return "Шаг 1 из 5 · сними IoT-трекер"
+        case .deck:        return "Шаг 2 из 5 · найди деку"
+        case .screwdriver: return "Шаг 3 из 5 · вскрой деку"
+        case .screws:      return "Шаг 4 из 5 · сними контроллер"
+        case .controller:  return "Шаг 4 из 5 · контроллер снят"
+        case .display:     return "Шаг 5 из 5 · сними дисплей"
         case .result:      return "Готово"
         }
     }
 
-    // MARK: Шаг 1 — дека
+    // MARK: Шаг 1 — IoT-трекер
+
+    private var trackerStep: some View {
+        VStack(spacing: 12) {
+            InfoCard(text: "Первым делом сними IoT-трекер. Он стоит посередине высокой рулевой колонки и держится на двух T20 торкс-болтах.")
+
+            PhotoTapView(
+                map: hotspots,
+                highlight: showTrackerHint ? hotspots.tracker : nil,
+                onTap: { point in
+                    if hotspots.tracker.contains(point) {
+                        hint = nil
+                        step = .trackerBolts
+                    } else {
+                        showTrackerHint = true
+                        hint = "Не то. Трекер — посередине рулевой колонки, на самой стойке."
+                    }
+                }
+            )
+
+            if let hint {
+                Text(hint)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.bad)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+
+    private var trackerBoltsStep: some View {
+        VStack(spacing: 12) {
+            if !store.owns(.torx) {
+                torxShopCard
+            } else {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("IoT-трекер")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundColor(.textPrimary)
+
+                    Text("Открути два болта T20: осталось \(trackerBoltsLeft).")
+                        .font(.system(size: 11))
+                        .foregroundColor(.muted)
+
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(Color(hex: 0x161B24))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .stroke(Color.line, lineWidth: 1)
+                            )
+
+                        VStack(spacing: 6) {
+                            Image(systemName: "antenna.radiowaves.left.and.right")
+                                .font(.system(size: 30, weight: .semibold))
+                                .foregroundColor(trackerBoltsLeft == 0 ? .good : .accent)
+                            Text("GPS / IoT")
+                                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                .foregroundColor(.muted)
+                        }
+                        .opacity(trackerBoltsLeft == 0 ? 1 : 0.5)
+
+                        ForEach(0..<2, id: \.self) { index in
+                            trackerBoltButton(index)
+                                .offset(x: index == 0 ? -74 : 74)
+                        }
+                    }
+                    .frame(height: 150)
+                }
+                .cardStyle()
+
+                PrimaryActionButton(
+                    title: trackerBoltsLeft == 0 ? "Снять трекер" : "Осталось болтов: \(trackerBoltsLeft)",
+                    icon: "antenna.radiowaves.left.and.right",
+                    enabled: trackerBoltsLeft == 0
+                ) {
+                    hint = nil
+                    step = .deck
+                }
+            }
+        }
+    }
+
+    private func trackerBoltButton(_ index: Int) -> some View {
+        let removed = trackerBolts.contains(index)
+
+        return Button {
+            trackerBolts.insert(index)
+        } label: {
+            ZStack {
+                Circle()
+                    .fill(Color(hex: 0x2A303B))
+                    .frame(width: 38, height: 38)
+                Circle()
+                    .stroke(Color(hex: 0x4A5261), lineWidth: 1.5)
+                    .frame(width: 38, height: 38)
+                if removed {
+                    Circle()
+                        .fill(Color(hex: 0x0B0E13))
+                        .frame(width: 14, height: 14)
+                } else {
+                    Image(systemName: "asterisk")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundColor(.accent)
+                }
+            }
+        }
+        .buttonStyle(PressableStyle())
+        .disabled(removed)
+    }
+
+    // MARK: Шаг 2 — дека
 
     private var deckStep: some View {
         VStack(spacing: 12) {
@@ -206,44 +328,50 @@ struct StripGameView: View {
 
     // MARK: Шаг 3 — торкс-винты и контроллер
 
+    private var torxShopCard: some View {
+        VStack(spacing: 10) {
+            InfoCard(text: "Контроллер и трекер прикручены торкс-винтами T20. Без набора торкс-бит их не снять.")
+
+            HStack(spacing: 12) {
+                PartArt(key: "torx")
+                    .frame(width: 52, height: 52)
+                    .padding(6)
+                    .background(Color.panel2)
+                    .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(ToolKind.torx.title)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.textPrimary)
+                    Text(ToolKind.torx.note)
+                        .font(.system(size: 10))
+                        .foregroundColor(.muted)
+                }
+
+                Spacer(minLength: 4)
+
+                Button {
+                    store.buyTool(.torx)
+                } label: {
+                    Text(rub(ToolKind.torx.price))
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(store.state.money >= ToolKind.torx.price ? .appBg : .muted)
+                        .padding(.horizontal, 11)
+                        .padding(.vertical, 6)
+                        .background(store.state.money >= ToolKind.torx.price ? Color.accent : Color.panel2)
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(PressableStyle())
+                .disabled(store.state.money < ToolKind.torx.price)
+            }
+            .cardStyle()
+        }
+    }
+
     private var screwsStep: some View {
         VStack(spacing: 12) {
             if !store.owns(.torx) {
-                InfoCard(text: "Контроллер прикручен специальными торкс-винтами. Без набора торкс-бит его не снять.")
-
-                HStack(spacing: 12) {
-                    PartArt(key: "torx")
-                        .frame(width: 52, height: 52)
-                        .padding(6)
-                        .background(Color.panel2)
-                        .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
-
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(ToolKind.torx.title)
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(.textPrimary)
-                        Text(ToolKind.torx.note)
-                            .font(.system(size: 10))
-                            .foregroundColor(.muted)
-                    }
-
-                    Spacer(minLength: 4)
-
-                    Button {
-                        store.buyTool(.torx)
-                    } label: {
-                        Text(rub(ToolKind.torx.price))
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundColor(store.state.money >= ToolKind.torx.price ? .appBg : .muted)
-                            .padding(.horizontal, 11)
-                            .padding(.vertical, 6)
-                            .background(store.state.money >= ToolKind.torx.price ? Color.accent : Color.panel2)
-                            .clipShape(Capsule())
-                    }
-                    .buttonStyle(PressableStyle())
-                    .disabled(store.state.money < ToolKind.torx.price)
-                }
-                .cardStyle()
+                torxShopCard
             } else {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Дека вскрыта")
@@ -440,7 +568,7 @@ struct StripGameView: View {
                 }
 
                 if parts.contains(where: { $0.needsFirmware }) {
-                    Text("Электронику с шеринга нужно прошить ST-LINK V2 в «Магазине» → «Инструмент», иначе она не встанет на самокат.")
+                    Text("Электронику нужно прошить ST-LINK V2: «Магазин» → «Инструмент». Шанс успеха 70%, иначе блок уйдёт в мусор.")
                         .font(.system(size: 10))
                         .foregroundColor(.muted)
                         .fixedSize(horizontal: false, vertical: true)

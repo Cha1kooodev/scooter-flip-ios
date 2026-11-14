@@ -49,6 +49,7 @@ struct FlashGameView: View {
     @State private var errorText: String?
     @State private var flashing = false
     @State private var done = false
+    @State private var failed = false
 
     private var blocks: [PartKind] { job.blocks }
     private var currentBlock: PartKind? {
@@ -63,6 +64,8 @@ struct FlashGameView: View {
                 missingTool
             } else if done {
                 successView
+            } else if failed {
+                failedView
             } else {
                 content
             }
@@ -98,7 +101,8 @@ struct FlashGameView: View {
                 }
 
                 Text("Порядок пинов на плате меняется — смотри подписи. " +
-                     "ST-LINK V2 подключается к SWDIO, SWCLK и GND.")
+                     "ST-LINK V2 подключается к SWDIO, SWCLK и GND. " +
+                     "Прошивка проходит в 70% случаев: остальные 30% — блок не отвечает.")
                     .font(.system(size: 10))
                     .foregroundColor(.muted)
                     .fixedSize(horizontal: false, vertical: true)
@@ -298,8 +302,11 @@ struct FlashGameView: View {
                 selected = nil
                 errorText = nil
             } else {
-                store.finishFlash(job)
-                done = true
+                let outcome = store.finishFlash(job)
+                switch outcome {
+                case .success: done = true
+                case .failed:  failed = true
+                }
             }
         }
     }
@@ -342,6 +349,49 @@ struct FlashGameView: View {
             return fault == .all
                 ? "Контроллер, батарея и дисплей прошиты. Ошибка снята."
                 : "\(fault.blocks.first?.title ?? "Блок") прошит. Ошибка снята."
+        }
+    }
+
+    // MARK: Неудача
+
+    private var failedView: some View {
+        VStack(spacing: 14) {
+            Spacer()
+
+            Image(systemName: "xmark.octagon.fill")
+                .font(.system(size: 64))
+                .foregroundColor(.bad)
+
+            Text("Прошивка не удалась")
+                .font(.system(size: 21, weight: .heavy))
+                .foregroundColor(.textPrimary)
+
+            Text(failedText)
+                .font(.system(size: 12))
+                .foregroundColor(.muted)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 24)
+
+            Text("Шанс успеха — 70%")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(.warn)
+
+            Spacer()
+
+            PrimaryActionButton(title: "Готово", icon: "checkmark", color: .bad) {
+                dismiss()
+            }
+            .padding(.horizontal, 16)
+        }
+        .padding(.bottom, 24)
+    }
+
+    private var failedText: String {
+        switch job {
+        case .part(let part):
+            return "\(part.title) заблокировался и ушёл в мусор. Скрути ещё один с шеринга."
+        case .scooter:
+            return "Блок не отвечает, ошибка осталась. Можно попробовать прошить снова."
         }
     }
 

@@ -30,12 +30,13 @@ struct GameState: Codable {
     var tools: [String: Bool]
     var flashedParts: Int
     var flashedScooters: Int
+    var flashFails: Int
 
     enum CodingKeys: String, CodingKey {
         case money, scooters, listings, parts, profit, soldCount, repairs, rolls
         case bestNumber, playerName, startedAt, totalBought, totalSpent, totalEarned
         case strips, caught
-        case unflashed, tools, flashedParts, flashedScooters
+        case unflashed, tools, flashedParts, flashedScooters, flashFails
     }
 
     init(money: Int,
@@ -57,7 +58,8 @@ struct GameState: Codable {
          unflashed: [String: Int] = [:],
          tools: [String: Bool] = [:],
          flashedParts: Int = 0,
-         flashedScooters: Int = 0) {
+         flashedScooters: Int = 0,
+         flashFails: Int = 0) {
         self.money = money
         self.scooters = scooters
         self.listings = listings
@@ -78,6 +80,7 @@ struct GameState: Codable {
         self.tools = tools
         self.flashedParts = flashedParts
         self.flashedScooters = flashedScooters
+        self.flashFails = flashFails
     }
 
     init(from decoder: Decoder) throws {
@@ -102,6 +105,7 @@ struct GameState: Codable {
         tools = try container.decodeIfPresent([String: Bool].self, forKey: .tools) ?? [:]
         flashedParts = try container.decodeIfPresent(Int.self, forKey: .flashedParts) ?? 0
         flashedScooters = try container.decodeIfPresent(Int.self, forKey: .flashedScooters) ?? 0
+        flashFails = try container.decodeIfPresent(Int.self, forKey: .flashFails) ?? 0
     }
 
     static func fresh() -> GameState {
@@ -638,24 +642,42 @@ final class GameStore: ObservableObject {
     }
 
     /// Прошивка завершена: деталь со склада или самокат с прошивочной неисправностью.
-    func finishFlash(_ job: FlashJobKind) {
+    /// Успех — 70%, иначе блок блокируется: деталь уходит в мусор, ошибка самоката остаётся.
+    @discardableResult
+    func finishFlash(_ job: FlashJobKind) -> FlashResult {
+        let success = Int.random(in: 0..<100) < 70
+        var result: FlashResult = success ? .success : .failed
+
         switch job {
         case .part(let part):
             let pending = unflashedStock(of: part)
             guard pending > 0 else {
                 showToast("Нечего прошивать")
-                return
+                return .failed
             }
             state.unflashed[part.rawValue] = pending - 1
-            state.parts[part.rawValue] = stock(of: part) + 1
-            state.flashedParts += 1
+            if success {
+                state.parts[part.rawValue] = stock(of: part) + 1
+                state.flashedParts += 1
+            } else {
+                state.flashFails += 1
+                result = .failed
+            }
 
         case .scooter(let id, _):
-            guard let index = state.scooters.firstIndex(where: { $0.id == id }) else { return }
-            state.scooters[index].flashFault = nil
-            state.flashedScooters += 1
+            guard let index = state.scooters.firstIndex(where: { $0.id == id }) else {
+                return .failed
+            }
+            if success {
+                state.scooters[index].flashFault = nil
+                state.flashedScooters += 1
+            } else {
+                state.flashFails += 1
+                result = .failed
+            }
         }
         save()
+        return result
     }
 
     // MARK: Профиль
@@ -706,11 +728,6 @@ final class GameStore: ObservableObject {
 
     // MARK: Разборка шеринга
 
-    static let sharingLootPool: [PartKind] = [
-        .battery, .controller, .display, .motor, .battery,
-        .controller, .display, .tire, .pads, .bearing, .disc,
-    ]
-
     private static let stripModels = [
         "ninebot-s90l",
         "ninebot-snsc20", "ninebot-snsc22", "ninebot-snsc23", "ninebot-snsc24",
@@ -751,16 +768,10 @@ final class GameStore: ObservableObject {
             return .caught
         }
 
-        let count = Int.random(in: 1...2)
-        var loot: [PartKind] = []
-        for _ in 0..<count {
-            let part = Self.sharingLootPool.randomElement() ?? .motor
-            if part.needsFirmware {
-                state.unflashed[part.rawValue] = unflashedStock(of: part) + 1
-            } else {
-                state.parts[part.rawValue] = stock(of: part) + 1
-            }
-            loot.append(part)
+        // С шерингового Ninebot всегда снимаем электронику: контроллер, батарею и дисплей.
+        let loot: [PartKind] = [.controller, .battery, .display]
+        for part in loot {
+            state.unflashed[part.rawValue] = unflashedStock(of: part) + 1
         }
         save()
         return .success(loot)
